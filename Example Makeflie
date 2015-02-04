@@ -1,0 +1,6 @@
+
+GM_FLAGS = -I/usr/local/include/gm -L/usr/local/lib -lgm
+
+all:
+	g++ main.cpp -static $(GM_FLAGS)
+

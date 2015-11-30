@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <asm/types.h>
 
-#include <pmd.h>
-#include <usb-3100.h>
+#include "pmd.h"
+#include "usb-3100.h"
 
 #include <iostream>
 
@@ -22,7 +22,7 @@ public:
 
 	const GM& operator=(const GM& gm);
 
-	~GM();
+	virtual ~GM();
 
 	// Changes analog output (i.e. changes angle of mirror)
 	virtual bool setValue(int v);

@@ -1,11 +1,11 @@
 CC = g++
-MCC_FLAGS = -I/usr/local/include/usbhid
-CFLAGS = -static -c -fPIC -Wall
+MCC_FLAGS = -I/usr/local/include/usbhid -I/usr/local/include/libusb-1.0 -L/usr/local/lib -lusb-1.0 -lhidapi-libusb
+CFLAGS = -static -c -fPIC -Wall -std=c++11
 INSTALL_PATH = /usr/local
 PYTHON_INSTALL_PATH = /usr/lib/python2.7/dist-packages
 
-HEADERS = FSO.h simplefso.h gm.h gm_utils.h pmd.h usb-3100.h
-SOURCES = FSO.cpp simplefso.cpp extern.cpp gm.cpp gm_utils.cpp usb-3100.cpp pmd.cpp
+HEADERS = gm.h diode.h usb_handle_registry.h pmd.h usb-3100.h usb-1608G.h
+SOURCES = extern.cpp gm.cpp diode.cpp usb_handle_registry.cpp pmd.cpp usb-3100.cpp usb-1608G.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 all: $(SOURCES) libgm.a libgm.so

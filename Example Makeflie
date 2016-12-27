@@ -1,6 +1,6 @@
 
-GM_FLAGS = -I/usr/local/include/gm -L/usr/local/lib -lgm
+GM_FLAGS = -static -I/usr/local/include/gm -L/usr/local/lib -lgm -lusb-1.0
 
 all:
-	g++ main.cpp -static $(GM_FLAGS)
+	g++ main.cpp $(GM_FLAGS)
 

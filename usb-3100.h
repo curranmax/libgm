@@ -1,21 +1,20 @@
 /*
  *
- *  Copyright (c) 2006-2012  Warren Jasper <wjasper@tx.ncsu.edu>
+ *  Copyright (c) 2015 Warren J. Jasper <wjasper@tx.ncsu.edu>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- */
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+*/
 
 #ifndef USB_31XX_H
 
@@ -75,35 +74,33 @@ extern "C" {
 #define WRITE_SERIAL     (0x53) // Write a new serial number to device
 
 /* function prototypes for the USB-31XX */
-void usbDConfigPort_USB31XX(int fd, __u8 direction);
-void usbDConfigBit_USB31XX(int fd, __u8 bit_num, __u8 direction);
-void usbDIn_USB31XX(int fd, __u8* din_value);
-void usbDInBit_USB31XX(int fd, __u8 bit_num, __u8* value);
-void usbDOut_USB31XX(int fd, __u8 value);
-void usbDOutBit_USB31XX(int fd, __u8 bit_num, __u8 value);
+void usbDConfigPort_USB31XX(hid_device *hid, uint8_t direction);
+void usbDIn_USB31XX(hid_device *hid, uint8_t* din_value);
+void usbDOut_USB31XX(hid_device *hid, uint8_t value);
+void usbDBitIn_USB31XX(hid_device *hid, uint8_t bit_num, uint8_t* value);
+void usbDBitOut_USB31XX(hid_device *hid, uint8_t bit_num, uint8_t value);
 
-void usbAOutConfig_USB31XX(int fd, __u8 channel, __u8 range);
-void usbAOut_USB31XX(int fd, __u8 channel, __u16 value, __u8 update);
-void usbAOutSync_USB31XX(int fd);
+void usbAOutConfig_USB31XX(hid_device *hid, uint8_t channel, uint8_t range);
+void usbAOut_USB31XX(hid_device *hid, uint8_t channel, uint16_t value, uint8_t update);
+void usbAOutSync_USB31XX(hid_device *hid);
 
-void usbInitCounter_USB31XX(int fd);
-__u32 usbReadCounter_USB31XX(int fd);
+void usbInitCounter_USB31XX(hid_device *hid);
+uint32_t usbReadCounter_USB31XX(hid_device *hid);
 
-void usbReadMemory_USB31XX( int fd, __u16 address, __u8 count, __u8* memory);
-// int usbWriteMemory_USB31XX(int fd, __u16 address,  __u8 count, __u8 data[]);
-void usbBlink_USB31XX(int fd, __u8 count);
-int usbReset_USB31XX(int fd);
-void usbSetSync_USB31XX(int fd, __u8 type);
-__u16 usbGetStatus_USB31XX(int fd);
-void usbPrepareDownload_USB31XX(int fd);
-void usbUpdateCode_USB31XX(int fd);
-void usbWriteSerial_USB31XX(int fd, __u8 serial[8]);
+void usbReadMemory_USB31XX( hid_device *hid, uint16_t address, uint8_t count, uint8_t* memory);
+int usbWriteMemory_USB31XX(hid_device *hid, uint16_t address, uint8_t count, uint8_t data[]);
+void usbBlink_USB31XX(hid_device *hid, uint8_t count);
+int usbReset_USB31XX(hid_device *hid);
+uint8_t usbGetStatus_USB31XX(hid_device *hid);
+void usbPrepareDownload_USB31XX(hid_device *hid);
+int usbWriteCode_USB31XX(hid_device *hid, uint32_t address, uint8_t count, uint8_t data[]);
+void usbWriteSerial_USB31XX(hid_device *hid, uint8_t serial[8]);
+uint16_t volts_USB31XX(uint8_t range, float value);
 
-typedef struct t_USB31XX_CalibrationTable {
+typedef struct USB31XX_CalibrationTable_t {
  float slope;
  float offset;
 } USB31XX_CalibrationTable;
-
   
 #ifdef __cplusplus
 } /* closing brace for extern "C" */

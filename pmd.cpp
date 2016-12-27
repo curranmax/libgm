@@ -1,248 +1,220 @@
 /*
  *
- *  Copyright (c) 2004-2005 Warren Jasper <wjasper@tx.ncsu.edu>
+ *  Copyright (c) 2014 Warren J. Jasper <wjasper@tx.ncsu.edu>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- */
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+*/
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <fcntl.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <errno.h>
-#include <syslog.h>
-#include <asm/types.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <linux/hiddev.h>
 #include "pmd.h"
 
-#define dsyslog if(debug) syslog
-
-int debug = 0;
-
-// Driver Functions
-
-int PMD_Find(int vendor, int product, int fd[])
+#define EP_INTR (1 | LIBUSB_ENDPOINT_IN)
+#define EP_DATA (2 | LIBUSB_ENDPOINT_IN)
+    
+int usb_get_max_packet_size(libusb_device_handle* udev, int endpointNum) 
 {
-  int i;
-  int fd_temp;
-  int num_interfaces = 0;    // number of interfaces for this HID device
-  char devname[80];
-  char devname_old[80];
-  struct hiddev_devinfo device_info;
+  struct libusb_device *device;
+  struct libusb_device_descriptor desc;
+  struct libusb_config_descriptor *config;
+  const struct libusb_interface *interface;
+  const struct libusb_interface_descriptor *altsetting;
+  const struct libusb_endpoint_descriptor *endpoint;
+  int packet_size;
+  int ret;
 
-  for(i = 0; i < MAX_HIDDEV; i++){
-    sprintf(devname, "/dev/hiddev%d", i);         // new locatin for hiddev
-    sprintf(devname_old, "/dev/usb/hiddev%d", i); // old location for hiddev
-    if ((fd_temp = open(devname, O_RDONLY)) < 0) {
-      if ((fd_temp = open(devname_old, O_RDONLY)) < 0) {
-        continue;
-      }
-    }
-    /* get device information */
-    if ( ioctl(fd_temp, HIDIOCGDEVINFO, &device_info) >= 0) {
-      /* check vendor and product */
-      if (vendor == device_info.vendor &&
-	   product == device_info.product) {
-	/* this is us */
-        fd[num_interfaces++] = fd_temp;
+  device = libusb_get_device(udev);
+  ret = libusb_get_active_config_descriptor(device, &config);
+  if (ret < 0) {
+    perror("usb_get_max_packet_size: error in libusb_get_active_config_descriptor");
+    return ret;
+  }
+  interface = &config->interface[0];
+  altsetting = &interface->altsetting[0];
+  endpoint = &altsetting->endpoint[endpointNum];
+  if (endpoint == NULL) {
+   libusb_get_device_descriptor(device, &desc);
+   packet_size = desc.bMaxPacketSize0;
+  } else {
+    packet_size = endpoint->wMaxPacketSize;
+  }
+  libusb_free_config_descriptor(config);
+  return packet_size;
+}
+
+libusb_device_handle* usb_device_find_USB_MCC( int productId, const char *serialID )
+{
+  int vendorId = MCC_VID;
+
+  struct libusb_device_handle *udev = NULL;
+  struct libusb_device_descriptor desc;
+  struct libusb_device **list;
+  struct libusb_device *found = NULL;
+  struct libusb_device *device;
+  char serial[9];
+
+  ssize_t cnt = 0;
+  ssize_t i = 0;
+  int err = 0;
+  int cfg;
+  int config;
+
+  // discover devices
+  cnt = libusb_get_device_list(NULL, &list);
+
+  if (cnt < 0) {
+    perror("No USB devices found on bus.");
+    return NULL;
+  }
+
+  for (i = 0; i < cnt; i++) {
+    device = list[i];
+    err = libusb_get_device_descriptor(device, &desc);
+    if (err < 0) goto out;
+    if (desc.idVendor == vendorId && desc.idProduct == productId) {
+      found = device;
+      err = libusb_open(found, &udev);
+      if (err < 0) {
+	udev = NULL;
 	continue;
       }
-    }
-    close(fd_temp);
-  }
-  return num_interfaces;
-}
-
-char * PMD_GetSerialNumber(int fd)
-{
-  static struct hiddev_string_descriptor string_descriptor;
-  string_descriptor.index = 3;  // The third string is the serial number.
-
-  if (ioctl(fd, HIDIOCGSTRING, &string_descriptor) >= 0) {
-    return (string_descriptor.value);
-  } else {
-    return 0;
-  }
-}
-
-int PMD_SendOutputReport(int fd, __u8 reportID, __u8* vals, int num_vals, int delay)
-{
-  int ret = 0, i;
-  struct hiddev_report_info out_report;
-  struct hiddev_usage_ref uref;
-
-  uref.report_type = HID_REPORT_TYPE_OUTPUT;
-  uref.report_id = reportID;
-  uref.field_index = 0;
-  uref.usage_index = 0;
-
-  /* usage code for this for this usage */
-  ret = ioctl(fd, HIDIOCGUCODE, &uref);
-  if (ret < 0) {
-    perror("SendCommandFS: ioctl to get usage code for out report");
-    return ret;
-  }
-
-  /* fill in usage values. */
-  for( i = 0; (i < num_vals) && vals; i++){
-    uref.usage_index = i;
-    uref.value = vals[i];
-    ioctl(fd, HIDIOCSUSAGE, &uref);
-    if (ret < 0) {
-      perror("SendCommandFS:ioctl to set usage value for out report");
-      return ret;
-    }
-  }
-
-  /* tell the driver about the usage values */
-  out_report.report_type = HID_REPORT_TYPE_OUTPUT;
-  out_report.report_id = reportID;
-  ioctl(fd, HIDIOCGREPORTINFO, &out_report);
-  if (0 > ret) {
-    perror("SendCommandFS: ioctl to get out report info");
-    return ret;
-  }
-  /* this ioctl puts the report on the wire */
-  ret = ioctl(fd, HIDIOCSREPORT, &out_report);
-  if (0 > ret) {
-    perror("SendCommandFS: ioctl to send output report");
-    return ret;
-  }
-  usleep(delay);
-  return ret;
-}
-
-#if 0
-
-struct hiddev_event ev[64];
-int PMD_GetInputReport(int fd, __u8 reportID, __u8 *vals, int num_vals, int timeout)
-{
-  fd_set fdset;
-  int rd;
-  int ret = 0, i;
-  struct timeval tv;
-
-  tv.tv_sec = 0;
-  tv.tv_usec = timeout * 1000;
-  FD_ZERO(&fdset);
-  i = 0;
-  FD_SET(fd, &fdset);
-  rd = select(fd+1, &fdset, NULL, NULL, (timeout <= 0 ? NULL : &tv));
-  if (rd < 0) {
-    dsyslog(LOG_INFO,"Error reading USB device - %s\n",strerror(errno));
-    return rd;
-  }
-  if (rd == 0) {
-    dsyslog(LOG_INFO,"hidread timeout fd = %d\n",fd);
-    return 0;  // timeout
-  }
-
-  // now we have an event ready to go...
-  rd = read(fd, ev, sizeof(ev));
-  if (rd < 0) {
-    dsyslog(LOG_INFO,"Error reading USB device - %s\n",strerror(errno));
-    return rd;
-  }
-  if (rd < sizeof(ev[0])) {
-    dsyslog(LOG_INFO,"Error - got short read from USB device\n");
-    return -1;
-  }
-  
-  /*struct hiddev_usage_ref_multi in_usage_multi;*/
-  struct hiddev_usage_ref uref;
-
-  uref.report_type = HID_REPORT_TYPE_INPUT;
-  uref.report_id = reportID;
-  uref.field_index = 0;
-  uref.usage_index = 0;
-  uref.usage_code = 0xff000001;
-
-  for( i = 0; i < num_vals; i++){
-    uref.usage_index = i;
-    ret = ioctl(fd, HIDIOCGUSAGE, &uref);
-    vals[i] = (__u8)(uref.value & 0x000000FF) ;
-  }
-  return num_vals;
-}
-
+      err = libusb_kernel_driver_active(udev, 0);
+      if (err == 1) {
+	/* 
+	   device active by another driver. (like HID).  This can be dangerous,
+           as we don't know if the kenel has claimed the interface or another
+           process.  No easy way to tell at this moment, but HID devices won't
+           work otherwise.
+	 */
+#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000103)
+	libusb_set_auto_detach_kernel_driver(udev, 1);
+#else
+	libusb_detach_kernel_driver(udev, 0);
 #endif
-
-
-int PMD_GetInputReport(int fd, __u8 reportID, __u8 *vals, int num_vals, int delay)
-{
-  int ret = 0, i;
-  /*struct hiddev_usage_ref_multi in_usage_multi;*/
-  struct hiddev_usage_ref uref;
-
-  uref.report_type = HID_REPORT_TYPE_INPUT;
-  uref.report_id = reportID;
-  uref.field_index = 0;
-  uref.usage_index = 0;
-  uref.usage_code = 0xff000001;
-  /*
-  ioctl(fd, HIDIOCGUCODE, &uref);
-  if( 0 > ret) {
-    perror("ioctl to get output report usage code");
-    return ret;
-  }
-  */
-
-  for( i = 0; i < num_vals; i++){
-      uref.usage_index = i;
-      ioctl(fd, HIDIOCGUSAGE, &uref);
-      usleep(delay);
-      if(0 > ret){
-          perror("ioctl to set usage value for out report");
-          return ret;
       }
-      vals[i] = (__u8)(uref.value & 0x000000FF) ;
+      err = libusb_claim_interface(udev, 0);
+      if (err < 0) {
+        //printf("error claiming interface 0.\n");
+	libusb_close(udev);
+	udev = NULL;
+	continue;
+      }
+      /* Check to see if serial ID match */
+      if (serialID != NULL) {
+	libusb_get_string_descriptor_ascii(udev, desc.iSerialNumber, (unsigned char *) serial, 8);
+	serial[8] = '\0';
+        if (strcmp(serialID, serial) == 0) {
+	  break;
+	}
+      } else {
+        
+        /* If we got to here, we found a match and were able to claim the interface.  At
+  	  this point we should stop looking and break out;
+        */
+	break;
+      }
+    }
+  }
+
+  libusb_free_device_list(list,1);
+  if (udev) {
+    cfg = libusb_get_configuration(udev, &config);
+    if (cfg != 0) {
+      err = libusb_set_configuration(udev, 1);
+      if (err < 0) {
+	perror("error in setting configuration.");
+      }
+    }
+  }
+  return udev;
+
+out:
+  libusb_free_device_list(list,1);
+  libusb_close(udev);
+  libusb_exit(NULL);
+  exit(0);
+}
+
+void getUsbSerialNumber(libusb_device_handle *udev, unsigned char serial[])
+{
+  struct libusb_device_descriptor desc;
+  struct libusb_device *device;
+
+  device = libusb_get_device(udev);
+  libusb_get_device_descriptor(device, &desc);
+  libusb_get_string_descriptor_ascii(udev, desc.iSerialNumber, serial, 8);
+  serial[8] = '\0';
+}
+
+#define HS_DELAY 20
+
+int sendStringRequest(libusb_device_handle *udev, char *message)
+{
+  uint8_t requesttype = (HOST_TO_DEVICE | VENDOR_TYPE | DEVICE_RECIPIENT);
+  unsigned char string[MAX_MESSAGE_LENGTH];
+  int ret;
+  
+  strncpy((char *)string, message, MAX_MESSAGE_LENGTH);
+  string[MAX_MESSAGE_LENGTH - 1] = '\0';
+  //  printf("SendStringRequest: string = %s\n", string);
+
+  ret = libusb_control_transfer(udev, requesttype, STRING_MESSAGE, 0, 0, (unsigned char *) string, MAX_MESSAGE_LENGTH, HS_DELAY);
+  return ret;
+}
+
+int  getStringReturn(libusb_device_handle *udev, char *message)
+{
+  /* Return 64 byte message */
+  uint8_t requesttype = (DEVICE_TO_HOST | VENDOR_TYPE | DEVICE_RECIPIENT);
+  int ret;
+
+  ret = libusb_control_transfer(udev, requesttype, STRING_MESSAGE, 0, 0, (unsigned char *)message, MAX_MESSAGE_LENGTH, HS_DELAY);
+  //  printf("getStringReturn: string = %s\n", message);
+  return ret;
+}
+
+/********************** HID wrapper functions ******************/
+int PMD_SendOutputReport(hid_device* hid, uint8_t* values, size_t length)
+{
+  int ret;
+  
+  ret = hid_write(hid, values, length);
+  if (ret < 0) {
+    printf("PMD_SendOutputReport.  Unable to write data %ls \n", hid_error(hid));
   }
   return ret;
 }
 
-int PMD_GetFeatureReport(int fd, __u8 reportID, __u8 *vals, int num_vals, int delay)
+int PMD_GetInputReport(hid_device* hid, uint8_t *values, size_t length, int delay)
 {
-  int ret = 0, i;
-  struct hiddev_usage_ref uref;
-
-  uref.report_type = HID_REPORT_TYPE_FEATURE;
-  uref.report_id = reportID;
-  uref.field_index = 0;
-  uref.usage_index = 0;
-  //  uref.usage_code = 0xff000001;
-  ioctl(fd, HIDIOCGUCODE, &uref);
-  if( 0 > ret) {
-    perror("ioctl to get output report usage code");
-    return ret;
+  int res;
+  
+  //  err = hid_read_timeout(hid, values, length, delay);
+  res = hid_read_timeout(hid, values, length, delay);
+  if (res < 0) {
+    printf("PMD_GetInputReport.  Unable to read data %ls \n", hid_error(hid));
+    return res;
   }
-
-  for( i = 0; i < num_vals; i++){
-      uref.usage_index = i;
-      ioctl(fd, HIDIOCGUSAGE, &uref);
-      usleep(delay);
-      if(0 > ret){
-          perror("ioctl to set usage value for out report");
-          return ret;
-      }
-      vals[i] = (__u8)(uref.value & 0x000000FF) ;
-  }
-  return ret;
+  return res;
 }
 
-
+int PMD_GetFeatureReport(hid_device* hid, uint8_t *data, int length)
+{
+  hid_get_feature_report(hid, data, length);
+  return length;
+}

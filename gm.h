@@ -15,11 +15,12 @@
 
 class GM {
 public:
-	GM() : channel(0),fd(-1),value(0),connected(false) {}
-	GM(int ch) : channel(ch),fd(-1),value(0),connected(false) {}
+	GM(int ch,const std::string &serial_number_)
+		: handle(nullptr), value(0), is_connected(false),
+			channel(ch), serial_number(serial_number_) {}
 
+	// Copies parameters, but the copied GM is not connected.
 	GM(const GM &gm);
-
 	const GM& operator=(const GM& gm);
 
 	virtual ~GM();
@@ -28,32 +29,39 @@ public:
 	virtual bool setValue(int v);
 
 	// helper function to Connects to device
-	virtual void connectDevice();
-	virtual void disconnectDevice();
+	virtual bool connectDevice();
+	virtual bool disconnectDevice();
+
+	virtual bool isNull() const { return false; }
 
 	int getValue() const { return value; }
-
+	int getChannel() const { return channel; }
+	std::string getSerialNumber() const { return serial_number; }
 protected:
-	void _setFD(int _fd) { fd = _fd;}
-	void _setChannel(int _channel) { channel = _channel; }
-	void _setValue(int _value) { value = _value; }
-	void _setConnected(bool _connected) { connected = _connected; }
-
-	int _getFD() const { return fd; }
+	int _getValue() const { return value; }
+	bool _getConnected() const { return is_connected; }
 	int _getChannel() const { return channel; }
-	int _getValue() const { return value;}  // Just for symmetry
-	bool _getConnected() const { return connected; }
-	
-private:
-	// Parameters needed to talk to device
-	int channel;
-	int fd;
+	std::string _getSerialNumber() const { return serial_number; }
 
-	// Current analgo value device is set to
+	void _setValue(int x) { value = x; }
+	void _setConnected(bool x) { is_connected = x; }
+	void _setChannel(int x) { channel = x; }
+	void _setSerialNumber(const std::string& x) { serial_number = x; }
+private:
+	bool updateSerialNumber();
+	
+	// Has data used to talk to DAQ device
+	hid_device *handle;
+
+	// Current analog value device is set to
 	int value;
 
 	// Bool saying if connected or not
-	bool connected;
+	bool is_connected;
+
+	int channel;
+	std::string serial_number;
 };
+
 
 #endif

@@ -118,9 +118,8 @@ bool Diode::connectDevice() {
 
 bool Diode::disconnectDevice() {
 	if(is_connected) {
-		usbDLatchW_USB1608G(handle, 0x0);
-		cleanup_USB1608G(handle);
-		// Delete handle?
+		usb_handle::removeLibUsbHandle(serial_number);
+		
 		handle = nullptr;
 		is_connected = false;
 	}

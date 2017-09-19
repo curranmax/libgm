@@ -57,6 +57,7 @@ bool GM::connectDevice(){
 			std::cerr << "hid_init: Failed" <<std::endl;
 			return false;
 		}
+
 		if(serial_number == "") {
 			handle = hid_open(MCC_VID, USB3103_PID, NULL);
 		} else {
@@ -64,6 +65,7 @@ bool GM::connectDevice(){
 			std::copy(serial_number.begin(), serial_number.end(), temp.begin());
 			handle = hid_open(MCC_VID, USB3103_PID, temp.c_str());
 		}
+
 		if (handle == nullptr) {
 			handle = usb_handle::getHidHandle(serial_number);
 			if (handle ==nullptr) {
@@ -97,8 +99,7 @@ GM::~GM(){
 
 bool GM::disconnectDevice(){
 	if(is_connected) {
-		hid_close(handle);
-		hid_exit(); // This frees everything related to hid, so maybe should be called exactly once.
+		usb_handle::removeHidHandle(serial_number);
 		handle = nullptr;
 		is_connected = false;
 	}

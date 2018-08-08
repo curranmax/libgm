@@ -2,6 +2,8 @@
 #ifndef _GALVO_MIRROR_H_
 #define _GALVO_MIRROR_H_
 
+#include "gm_utils.h"
+
 #include <stdlib.h>
 #include <asm/types.h>
 
@@ -9,9 +11,6 @@
 #include "usb-3100.h"
 
 #include <iostream>
-
-#define MIN_GM_VALUE 0x0
-#define MAX_GM_VALUE 0xffff
 
 class GM {
 public:
@@ -31,6 +30,8 @@ public:
 	// helper function to Connects to device
 	virtual bool connectDevice();
 	virtual bool disconnectDevice();
+
+	virtual bool isConnected() const { return _getConnected(); }
 
 	virtual bool isNull() const { return false; }
 

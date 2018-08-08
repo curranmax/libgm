@@ -49,7 +49,7 @@ bool GM::setValue(int v){
 }
 
 // Sets up communication to device
-bool GM::connectDevice(){
+bool GM::connectDevice() {
 	if(!is_connected) {
 		// There maybe problems with calling this multiple times.
 		int rv = hid_init();
@@ -108,7 +108,7 @@ bool GM::disconnectDevice(){
 
 bool GM::updateSerialNumber() {
 	if(handle != nullptr) {
-		wchar_t new_serial_number_c_str[256];
+		wchar_t new_serial_number_c_str[64];
 		hid_get_serial_number_string(handle, new_serial_number_c_str, 64);
 
 		if (new_serial_number_c_str == nullptr) {

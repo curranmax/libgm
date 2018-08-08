@@ -67,10 +67,13 @@ float Diode::getValue() {
 	}
 	float avg_value = float(sum_samples) / float(num_samples);
 
+	std::cout << sum_samples << " " << num_samples << std::endl;
+
 	return avg_value;
 }
 
 float Diode::getVoltage() {
+	std::cout << "Diode::getVoltage" << std::endl;
 	return convertToVoltage(getValue());
 }
 
